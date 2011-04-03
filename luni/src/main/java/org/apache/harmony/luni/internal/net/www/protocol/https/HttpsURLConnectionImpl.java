@@ -25,9 +25,11 @@ import java.net.URL;
 import java.security.Permission;
 import java.security.Principal;
 import java.security.cert.Certificate;
+import java.security.cert.CertificateException;
 import java.util.List;
 import java.util.Map;
 import javax.net.ssl.HttpsURLConnection;
+import javax.net.ssl.SSLHandshakeException;
 import javax.net.ssl.SSLPeerUnverifiedException;
 import javax.net.ssl.SSLSocket;
 import org.apache.harmony.luni.internal.net.www.protocol.http.HttpConnection;
@@ -38,10 +40,19 @@ import org.apache.harmony.luni.internal.net.www.protocol.http.HttpURLConnectionI
  */
 public class HttpsURLConnectionImpl extends HttpsURLConnection {
 
-    // Https engine to be wrapped
+    /**
+     * HttpsEngine that allows reuse of HttpURLConnectionImpl
+     */
     private final HttpsEngine httpsEngine;
 
-    // SSLSocket to be used for connection
+    /**
+     * Local stash of HttpsEngine.connection.sslSocket for answering
+     * queries such as getCipherSuite even after
+     * httpsEngine.Connection has been recycled. It's presense is also
+     * used to tell if the HttpsURLConnection is considered connected,
+     * as opposed to the connected field of URLConnection or the a
+     * non-null connect in HttpURLConnectionImpl
+    */
     private SSLSocket sslSocket;
 
     protected HttpsURLConnectionImpl(URL url, int port) {
@@ -358,27 +369,52 @@ public class HttpsURLConnectionImpl extends HttpsURLConnection {
                 return;
             }
 
+            boolean connectionReused;
             // first try an SSL connection with compression and
             // various TLS extensions enabled, if it fails (and its
             // not unheard of that it will) fallback to a more
             // barebones connections
             try {
-                makeSslConnection(true);
+                connectionReused = makeSslConnection(true);
             } catch (IOException e) {
+                // If the problem was a CertificateException from the X509TrustManager,
+                // do not retry, we didn't have an abrupt server initiated exception.
+                if (e instanceof SSLHandshakeException
+                        && e.getCause() instanceof CertificateException) {
+                    throw e;
+                }
                 releaseSocket(false);
-                makeSslConnection(false);
+                connectionReused = makeSslConnection(false);
             }
+
+            if (!connectionReused) {
+                sslSocket = connection.verifySecureSocketHostname(getHostnameVerifier());
+            }
+            setUpTransportIO(connection);
         }
 
         /**
-         * Attempt to make an https connection.
+         * Attempt to make an https connection. Returns true if a
+         * connection was reused, false otherwise.
          *
          * @param tlsTolerant If true, assume server can handle common
          * TLS extensions and SSL deflate compression. If false, use
          * an SSL3 only fallback mode without compression.
          */
-        private void makeSslConnection(boolean tlsTolerant) throws IOException {
+        private boolean makeSslConnection(boolean tlsTolerant) throws IOException {
+
             super.makeConnection();
+
+            // if super.makeConnection returned a connection from the
+            // pool, sslSocket needs to be initialized here. If it is
+            // a new connection, it will be initialized by
+            // getSecureSocket below.
+            sslSocket = connection.getSecureSocketIfConnected();
+
+            // we already have an SSL connection,
+            if (sslSocket != null) {
+                return true;
+            }
 
             // make SSL Tunnel
             if (requiresTunnel()) {
@@ -394,10 +430,8 @@ public class HttpsURLConnectionImpl extends HttpsURLConnection {
                 }
             }
 
-            sslSocket = connection.getSecureSocket(getSSLSocketFactory(),
-                                                   getHostnameVerifier(),
-                                                   tlsTolerant);
-            setUpTransportIO(connection);
+            connection.setupSecureSocket(getSSLSocketFactory(), tlsTolerant);
+            return false;
         }
 
         @Override protected void setUpTransportIO(HttpConnection connection) throws IOException {

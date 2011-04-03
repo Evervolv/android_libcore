@@ -35,7 +35,7 @@ import java.util.logging.Logger;
 import javax.net.ssl.HandshakeCompletedEvent;
 import javax.net.ssl.HandshakeCompletedListener;
 import javax.net.ssl.SSLException;
-import javax.net.ssl.SSLPeerUnverifiedException;
+import javax.net.ssl.SSLHandshakeException;
 import javax.net.ssl.SSLSession;
 import javax.security.auth.x500.X500Principal;
 import org.apache.harmony.security.provider.cert.X509CertImpl;
@@ -474,7 +474,9 @@ public class OpenSSLSocketImpl
             sslSessionNativePointer = NativeCrypto.SSL_do_handshake(sslNativePointer, fd, this,
                                                                     getSoTimeout(), client);
         } catch (CertificateException e) {
-            throw new SSLPeerUnverifiedException(e.getMessage());
+            SSLHandshakeException exception = new SSLHandshakeException(e.getMessage());
+            exception.initCause(e);
+            throw exception;
         }
         byte[] sessionId = NativeCrypto.SSL_SESSION_session_id(sslSessionNativePointer);
         sslSession = (OpenSSLSessionImpl) sessionContext.getSession(sessionId);
@@ -1223,20 +1225,19 @@ public class OpenSSLSocketImpl
             synchronized (writeLock) {
                 synchronized (readLock) {
 
-                    IOException pendingException = null;
-
                     // Shut down the SSL connection, per se.
                     try {
                         if (handshakeStarted) {
                             BlockGuard.getThreadPolicy().onNetwork();
                             NativeCrypto.SSL_shutdown(sslNativePointer, fd, this);
                         }
-                    } catch (IOException ex) {
+                    } catch (IOException ignored) {
                         /*
-                         * Note the exception at this point, but try to continue
-                         * to clean the rest of this all up before rethrowing.
+                         * Note that although close() can throw
+                         * IOException, the RI does not throw if there
+                         * is problem sending a "close notify" which
+                         * can happen if the underlying socket is closed.
                          */
-                        pendingException = ex;
                     }
 
                     /*
@@ -1252,10 +1253,6 @@ public class OpenSSLSocketImpl
                     } else {
                         if (!super.isClosed())
                             super.close();
-                    }
-
-                    if (pendingException != null) {
-                        throw pendingException;
                     }
                 }
             }

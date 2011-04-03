@@ -55,10 +55,12 @@ import javax.net.ssl.HostnameVerifier;
 import javax.net.ssl.HttpsURLConnection;
 import javax.net.ssl.SSLContext;
 import javax.net.ssl.SSLException;
+import javax.net.ssl.SSLHandshakeException;
 import javax.net.ssl.SSLSession;
 import javax.net.ssl.SSLSocketFactory;
 import javax.net.ssl.TrustManager;
 import javax.net.ssl.X509TrustManager;
+import libcore.java.security.TestKeyStore;
 import libcore.javax.net.ssl.TestSSLContext;
 import tests.http.DefaultResponseCache;
 import tests.http.MockResponse;
@@ -201,11 +203,11 @@ public class URLConnectionTest extends junit.framework.TestCase {
         server.enqueue(response);
         server.play();
 
-        assertContent("ABCDEFGHIJKLMNOPQR", server.getUrl("/").openConnection());
+        assertContent("ABCDEFGHIJKLMNOPQR", server.getUrl("/foo").openConnection());
         assertEquals(0, server.takeRequest().getSequenceNumber());
-        assertContent("ABCDEFGHIJKLMNOPQR", server.getUrl("/").openConnection());
+        assertContent("ABCDEFGHIJKLMNOPQR", server.getUrl("/bar?baz=quux").openConnection());
         assertEquals(1, server.takeRequest().getSequenceNumber());
-        assertContent("ABCDEFGHIJKLMNOPQR", server.getUrl("/").openConnection());
+        assertContent("ABCDEFGHIJKLMNOPQR", server.getUrl("/z").openConnection());
         assertEquals(2, server.takeRequest().getSequenceNumber());
     }
 
@@ -217,11 +219,11 @@ public class URLConnectionTest extends junit.framework.TestCase {
         server.enqueue(response);
         server.play();
 
-        assertContent("ABCDEFGHIJKLMNOPQR", server.getUrl("/").openConnection());
+        assertContent("ABCDEFGHIJKLMNOPQR", server.getUrl("/foo").openConnection());
         assertEquals(0, server.takeRequest().getSequenceNumber());
-        assertContent("ABCDEFGHIJKLMNOPQR", server.getUrl("/").openConnection());
+        assertContent("ABCDEFGHIJKLMNOPQR", server.getUrl("/bar?baz=quux").openConnection());
         assertEquals(1, server.takeRequest().getSequenceNumber());
-        assertContent("ABCDEFGHIJKLMNOPQR", server.getUrl("/").openConnection());
+        assertContent("ABCDEFGHIJKLMNOPQR", server.getUrl("/z").openConnection());
         assertEquals(2, server.takeRequest().getSequenceNumber());
     }
 
@@ -461,6 +463,30 @@ public class URLConnectionTest extends junit.framework.TestCase {
         assertEquals("GET /foo HTTP/1.1", request.getRequestLine());
     }
 
+    /**
+     * Verify that we don't retry connections on certificate verification errors.
+     *
+     * http://code.google.com/p/android/issues/detail?id=13178
+     */
+    public void testConnectViaHttpsToUntrustedServer() throws IOException, InterruptedException {
+        TestSSLContext testSSLContext = TestSSLContext.create(TestKeyStore.getClientCA2(),
+                                                              TestKeyStore.getServer());
+
+        server.useHttps(testSSLContext.serverContext.getSocketFactory(), false);
+        server.enqueue(new MockResponse()); // unused
+        server.play();
+
+        HttpsURLConnection connection = (HttpsURLConnection) server.getUrl("/foo").openConnection();
+        connection.setSSLSocketFactory(testSSLContext.clientContext.getSocketFactory());
+        try {
+            connection.getInputStream();
+            fail();
+        } catch (SSLHandshakeException expected) {
+            assertTrue(expected.getCause() instanceof CertificateException);
+        }
+        assertEquals(0, server.getRequestCount());
+    }
+
     public void testConnectViaProxyUsingProxyArg() throws Exception {
         testConnectViaProxy(ProxyConfig.CREATE_ARG);
     }
@@ -542,14 +568,6 @@ public class URLConnectionTest extends junit.framework.TestCase {
 
     public void testConnectViaHttpProxyToHttpsUsingProxyArg() throws Exception {
         testConnectViaHttpProxyToHttps(ProxyConfig.CREATE_ARG);
-    }
-
-    /**
-     * We weren't honoring all of the appropriate proxy system properties when
-     * connecting via HTTPS. http://b/3097518
-     */
-    public void testConnectViaHttpProxyToHttpsUsingProxySystemProperty() throws Exception {
-        testConnectViaHttpProxyToHttps(ProxyConfig.PROXY_SYSTEM_PROPERTY);
     }
 
     public void testConnectViaHttpProxyToHttpsUsingHttpsProxySystemProperty() throws Exception {
@@ -1459,6 +1477,24 @@ public class URLConnectionTest extends junit.framework.TestCase {
         out.flush(); // dubious but permitted
         try {
             out.write("ghi".getBytes("UTF-8"));
+            fail();
+        } catch (IOException expected) {
+        }
+    }
+
+    public void testGetHeadersThrows() throws IOException {
+        server.enqueue(new MockResponse().setDisconnectAtStart(true));
+        server.play();
+
+        HttpURLConnection connection = (HttpURLConnection) server.getUrl("/").openConnection();
+        try {
+            connection.getInputStream();
+            fail();
+        } catch (IOException expected) {
+        }
+
+        try {
+            connection.getInputStream();
             fail();
         } catch (IOException expected) {
         }
