@@ -90,6 +90,7 @@ include $(CLEAR_VARS)
 
 LOCAL_CFLAGS += -Wall -Wextra -Werror
 LOCAL_CFLAGS += $(core_cflags)
+
 ifeq ($(TARGET_ARCH),arm)
 # Ignore "note: the mangling of 'va_list' has changed in GCC 4.4"
 LOCAL_CFLAGS += -Wno-psabi
