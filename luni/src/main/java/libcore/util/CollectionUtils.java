@@ -83,16 +83,32 @@ public final class CollectionUtils {
      * not use {@link Object#equals}: only the comparator defines equality.
      */
     public static <T> void removeDuplicates(List<T> list, Comparator<? super T> comparator) {
-        Collections.sort(list, comparator);
-        int j = 1;
-        for (int i = 1; i < list.size(); i++) {
-            if (comparator.compare(list.get(j - 1), list.get(i)) != 0) {
-                T object = list.get(i);
-                list.set(j++, object);
+        int listSize = list.size();
+        if (listSize != 0) {
+            Collections.sort(list, comparator);
+            // iterate until we find first duplicate
+            T last_item = list.get(0);
+            for (int i = 1; i < listSize; i++) {
+                T item = list.get(i);
+                if (comparator.compare(last_item, item) == 0) {
+                    // handle duplicate
+                    int j = i;  // target index of duplicate value that may be overwritten
+                    last_item = item;
+                    i++;
+                    for (; i < listSize; i++) {
+                        item = list.get(i);
+                        if (comparator.compare(last_item, item) != 0) {
+                            list.set(j, item);
+                            last_item = item;
+                            j++;
+                        }
+                    }
+                    // truncate list
+                    list.subList(j, listSize).clear();
+                    return;
+                }
+                last_item = item;
             }
-        }
-        if (j < list.size()) {
-            list.subList(j, list.size()).clear();
         }
     }
 }
