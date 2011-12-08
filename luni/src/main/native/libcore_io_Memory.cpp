@@ -60,9 +60,17 @@ static inline void swapShorts(jshort* dstShorts, const jshort* srcShorts, size_t
 }
 
 static inline void swapInts(jint* dstInts, const jint* srcInts, size_t count) {
+    jbyte* dst = reinterpret_cast<jbyte*>(dstInts);
+    const jbyte* src = reinterpret_cast<const jbyte*>(srcInts);
     for (size_t i = 0; i < count; ++i) {
-        jint v = *srcInts++;
-        *dstInts++ = bswap_32(v);
+        jbyte b0 = *src++;
+        jbyte b1 = *src++;
+        jbyte b2 = *src++;
+        jbyte b3 = *src++;
+        *dst++ = b3;
+        *dst++ = b2;
+        *dst++ = b1;
+        *dst++ = b0;
     }
 }
 
