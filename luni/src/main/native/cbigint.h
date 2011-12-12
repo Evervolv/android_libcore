@@ -99,14 +99,46 @@ inline float INTBITS_TO_FLOAT(uint32_t const bits) {
 
 /* Replace P_FLOAT_HI and P_FLOAT_LOW */
 /* These macros are used to access the high and low 32-bit parts of a double (64-bit) value. */
-#define LOW_U32_FROM_DBL_PTR(dblptr) ((reinterpret_cast<U64U32DBL*>(dblptr))->u32val[DOUBLE_LO_OFFSET])
-#define HIGH_U32_FROM_DBL_PTR(dblptr) ((reinterpret_cast<U64U32DBL*>(dblptr))->u32val[DOUBLE_HI_OFFSET])
+//#define LOW_U32_FROM_DBL_PTR(dblptr) ((reinterpret_cast<U64U32DBL*>(dblptr))->u32val[DOUBLE_LO_OFFSET])
+inline uint32_t LOW_U32_FROM_DBL_PTR(jdouble* dblptr) {
+	union {
+		jdouble *d;
+		U64U32DBL *u;
+	};
+	d=dblptr;
+	return u->u32val[DOUBLE_LO_OFFSET];
+}
+//#define HIGH_U32_FROM_DBL_PTR(dblptr) ((reinterpret_cast<U64U32DBL*>(dblptr))->u32val[DOUBLE_HI_OFFSET])
+inline uint32_t HIGH_U32_FROM_DBL_PTR(jdouble* dblptr) {
+	union {
+		jdouble *d;
+		U64U32DBL *u;
+	};
+	d=dblptr;
+	return u->u32val[DOUBLE_HI_OFFSET];
+}
 #define LOW_I32_FROM_DBL_PTR(dblptr) ((reinterpret_cast<U64U32DBL*>(dblptr))->i32val[DOUBLE_LO_OFFSET])
 #define HIGH_I32_FROM_DBL_PTR(dblptr) ((reinterpret_cast<U64U32DBL*>(dblptr))->i32val[DOUBLE_HI_OFFSET])
 #define LOW_U32_FROM_DBL(dbl) LOW_U32_FROM_DBL_PTR(&(dbl))
 #define HIGH_U32_FROM_DBL(dbl) HIGH_U32_FROM_DBL_PTR(&(dbl))
-#define LOW_U32_FROM_LONG64_PTR(long64ptr) ((reinterpret_cast<U64U32DBL*>(long64ptr))->u32val[LONG_LO_OFFSET])
-#define HIGH_U32_FROM_LONG64_PTR(long64ptr) ((reinterpret_cast<U64U32DBL*>(long64ptr))->u32val[LONG_HI_OFFSET])
+//#define LOW_U32_FROM_LONG64_PTR(long64ptr) ((reinterpret_cast<U64U32DBL*>(long64ptr))->u32val[LONG_LO_OFFSET])
+inline uint32_t LOW_U32_FROM_LONG64_PTR(uint64_t* p) {
+	union {
+		uint64_t *u64;
+		U64U32DBL *u;
+	};
+	u64=p;
+	return u->u32val[LONG_LO_OFFSET];
+}
+//#define HIGH_U32_FROM_LONG64_PTR(long64ptr) ((reinterpret_cast<U64U32DBL*>(long64ptr))->u32val[LONG_HI_OFFSET])
+template <class X> inline uint32_t HIGH_U32_FROM_LONG64_PTR(X* p) {
+	union {
+		X *u64;
+		U64U32DBL *u;
+	};
+	u64=p;
+	return u->u32val[LONG_HI_OFFSET];
+}
 #define LOW_I32_FROM_LONG64_PTR(long64ptr) ((reinterpret_cast<U64U32DBL*>(long64ptr))->i32val[LONG_LO_OFFSET])
 #define HIGH_I32_FROM_LONG64_PTR(long64ptr) ((reinterpret_cast<U64U32DBL*>(long64ptr))->i32val[LONG_HI_OFFSET])
 #define LOW_U32_FROM_LONG64(long64) LOW_U32_FROM_LONG64_PTR(&(long64))
@@ -120,6 +152,39 @@ inline float INTBITS_TO_FLOAT(uint32_t const bits) {
 #define LOW_U32_FROM_PTR(u64ptr)  LOW_U32_FROM_LONG64_PTR(u64ptr)
 #define HIGH_U32_FROM_VAR(u64)    HIGH_U32_FROM_LONG64(u64)
 #define HIGH_U32_FROM_PTR(u64ptr) HIGH_U32_FROM_LONG64_PTR(u64ptr)
+
+inline void SET_LOW_U32(uint64_t *x, uint32_t y) {
+	union {
+		uint64_t *u64;
+		U64U32DBL *u;
+	};
+	u64 = x;
+	u->u32val[LONG_LO_OFFSET]=y;
+}
+inline void SET_HIGH_U32(uint64_t *x, uint32_t y) {
+	union {
+		uint64_t *u64;
+		U64U32DBL *u;
+	};
+	u64 = x;
+	u->u32val[LONG_HI_OFFSET]=y;
+}
+inline void SET_LOW_U32(jdouble *x, uint32_t y) {
+	union {
+		jdouble *jd;
+		U64U32DBL *u;
+	};
+	jd = x;
+	u->u32val[LONG_LO_OFFSET]=y;
+}
+inline void SET_HIGH_U32(jdouble *x, uint32_t y) {
+	union {
+		jdouble *jd;
+		U64U32DBL *u;
+	};
+	jd = x;
+	u->u32val[LONG_HI_OFFSET]=y;
+}
 
 void multiplyHighPrecision(uint64_t* arg1, int32_t length1, uint64_t* arg2, int32_t length2,
         uint64_t* result, int32_t length);

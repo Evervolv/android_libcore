@@ -227,8 +227,8 @@ static jdouble createDouble(JNIEnv* env, const char* s, jint e) {
         }
       else
         {
-          LOW_I32_FROM_VAR  (result) = -1;
-          HIGH_I32_FROM_VAR (result) = -1;
+          SET_LOW_U32 (&result, -1);
+          SET_HIGH_U32 (&result, -1);
         }
     }
   else
@@ -242,8 +242,8 @@ static jdouble createDouble(JNIEnv* env, const char* s, jint e) {
         }
       else
         {
-          LOW_I32_FROM_VAR  (result) = -1;
-          HIGH_I32_FROM_VAR (result) = -1;
+          SET_LOW_U32 (&result, -1);
+          SET_HIGH_U32 (&result, -1);
         }
     }
 
