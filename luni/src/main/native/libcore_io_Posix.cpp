@@ -373,14 +373,11 @@ private:
 };
 
 static jobject Posix_accept(JNIEnv* env, jobject, jobject javaFd, jobject javaInetSocketAddress) {
-    union {
-        sockaddr_storage ss;
-        sockaddr sa;
-    };
+    sockaddr_storage ss;
     socklen_t sl = sizeof(ss);
     memset(&ss, 0, sizeof(ss));
     int fd;
-    sockaddr* peer = (javaInetSocketAddress != NULL) ? &sa : NULL;
+    sockaddr* peer = (javaInetSocketAddress != NULL) ? reinterpret_cast<sockaddr*>(&ss) : NULL;
     socklen_t* peerLength = (javaInetSocketAddress != NULL) ? &sl : 0;
     jint clientFd = NET_FAILURE_RETRY("accept", accept(fd, peer, peerLength));
     if (clientFd == -1 || !fillInetSocketAddress(env, clientFd, javaInetSocketAddress, &ss)) {
@@ -403,15 +400,13 @@ static jboolean Posix_access(JNIEnv* env, jobject, jstring javaPath, jint mode) 
 }
 
 static void Posix_bind(JNIEnv* env, jobject, jobject javaFd, jobject javaAddress, jint port) {
-    union {
-        sockaddr_storage ss;
-        sockaddr sa;
-    };
+    sockaddr_storage ss;
     if (!inetAddressToSockaddr(env, javaAddress, port, &ss)) {
         return;
     }
     int fd;
-    NET_FAILURE_RETRY("bind", bind(fd, &sa, sizeof(sockaddr_storage)));
+    const sockaddr* sa = reinterpret_cast<const sockaddr*>(&ss);
+    NET_FAILURE_RETRY("bind", bind(fd, sa, sizeof(sockaddr_storage)));
 }
 
 static void Posix_chmod(JNIEnv* env, jobject, jstring javaPath, jint mode) {
@@ -435,15 +430,13 @@ static void Posix_close(JNIEnv* env, jobject, jobject javaFd) {
 }
 
 static void Posix_connect(JNIEnv* env, jobject, jobject javaFd, jobject javaAddress, jint port) {
-    union {
-        sockaddr_storage ss;
-        sockaddr sa;
-    };
+    sockaddr_storage ss;
     if (!inetAddressToSockaddr(env, javaAddress, port, &ss)) {
         return;
     }
     int fd;
-    NET_FAILURE_RETRY("connect", connect(fd, &sa, sizeof(sockaddr_storage)));
+    const sockaddr* sa = reinterpret_cast<const sockaddr*>(&ss);
+    NET_FAILURE_RETRY("connect", connect(fd, sa, sizeof(sockaddr_storage)));
 }
 
 static jobject Posix_dup(JNIEnv* env, jobject, jobject javaOldFd) {
@@ -596,9 +589,8 @@ static jobjectArray Posix_getaddrinfo(JNIEnv* env, jobject, jstring javaNode, jo
         }
 
         // Convert each IP address into a Java byte array.
-        sockaddr_storage address;
-	memcpy(&address, &ai->ai_addr, sizeof(struct sockaddr_storage));
-        ScopedLocalRef<jobject> inetAddress(env, sockaddrToInetAddress(env, &address, NULL));
+        sockaddr_storage* address = reinterpret_cast<sockaddr_storage*>(ai->ai_addr);
+        ScopedLocalRef<jobject> inetAddress(env, sockaddrToInetAddress(env, address, NULL));
         if (inetAddress.get() == NULL) {
             return NULL;
         }
@@ -629,10 +621,7 @@ static jstring Posix_getenv(JNIEnv* env, jobject, jstring javaName) {
 }
 
 static jstring Posix_getnameinfo(JNIEnv* env, jobject, jobject javaAddress, jint flags) {
-    union {
-        sockaddr_storage ss;
-	sockaddr sa;
-    };
+    sockaddr_storage ss;
     if (!inetAddressToSockaddrVerbatim(env, javaAddress, 0, &ss)) {
         return NULL;
     }
@@ -642,7 +631,7 @@ static jstring Posix_getnameinfo(JNIEnv* env, jobject, jobject javaAddress, jint
     // then remove this hack.
     socklen_t size = (ss.ss_family == AF_INET) ? sizeof(sockaddr_in) : sizeof(sockaddr_in6);
     char buf[NI_MAXHOST]; // NI_MAXHOST is longer than INET6_ADDRSTRLEN.
-    int rc = getnameinfo(&sa, size, buf, sizeof(buf), NULL, 0, flags);
+    int rc = getnameinfo(reinterpret_cast<sockaddr*>(&ss), size, buf, sizeof(buf), NULL, 0, flags);
     if (rc != 0) {
         throwGaiException(env, "getnameinfo", rc);
         return NULL;
@@ -672,13 +661,11 @@ static jobject Posix_getpwuid(JNIEnv* env, jobject, jint uid) {
 
 static jobject Posix_getsockname(JNIEnv* env, jobject, jobject javaFd) {
     int fd = jniGetFDFromFileDescriptor(env, javaFd);
-    union {
-        sockaddr_storage ss;
-        sockaddr sa;
-    };
+    sockaddr_storage ss;
+    sockaddr* sa = reinterpret_cast<sockaddr*>(&ss);
     socklen_t byteCount = sizeof(ss);
     memset(&ss, 0, byteCount);
-    int rc = TEMP_FAILURE_RETRY(getsockname(fd, &sa, &byteCount));
+    int rc = TEMP_FAILURE_RETRY(getsockname(fd, sa, &byteCount));
     if (rc == -1) {
         throwErrnoException(env, "getsockname");
         return NULL;
@@ -696,15 +683,12 @@ static jint Posix_getsockoptByte(JNIEnv* env, jobject, jobject javaFd, jint leve
 
 static jobject Posix_getsockoptInAddr(JNIEnv* env, jobject, jobject javaFd, jint level, jint option) {
     int fd = jniGetFDFromFileDescriptor(env, javaFd);
-    union {
-        sockaddr_storage ss;
-	sockaddr_in in;
-        sockaddr sa;
-    };
+    sockaddr_storage ss;
     memset(&ss, 0, sizeof(ss));
     ss.ss_family = AF_INET; // This is only for the IPv4-only IP_MULTICAST_IF.
-    socklen_t size = sizeof(in.sin_addr);
-    int rc = TEMP_FAILURE_RETRY(getsockopt(fd, level, option, &in.sin_addr, &size));
+    sockaddr_in* sa = reinterpret_cast<sockaddr_in*>(&ss);
+    socklen_t size = sizeof(sa->sin_addr);
+    int rc = TEMP_FAILURE_RETRY(getsockopt(fd, level, option, &sa->sin_addr, &size));
     if (rc == -1) {
         throwErrnoException(env, "getsockopt");
         return NULL;
@@ -763,13 +747,10 @@ static jobject Posix_inet_pton(JNIEnv* env, jobject, jint family, jstring javaNa
     if (name.c_str() == NULL) {
         return NULL;
     }
-    union {
-        sockaddr_storage ss;
-        sockaddr_in in;
-    };
+    sockaddr_storage ss;
     memset(&ss, 0, sizeof(ss));
     // sockaddr_in and sockaddr_in6 are at the same address, so we can use either here.
-    void* dst = &in.sin_addr;
+    void* dst = &reinterpret_cast<sockaddr_in*>(&ss)->sin_addr;
     if (inet_pton(family, name.c_str(), dst) != 1) {
         return NULL;
     }
@@ -787,9 +768,7 @@ static jobject Posix_ioctlInetAddress(JNIEnv* env, jobject, jobject javaFd, jint
     if (rc == -1) {
         return NULL;
     }
-    sockaddr_storage ss;
-    memcpy(&ss, &req.ifr_addr, sizeof(struct sockaddr_storage));
-    return sockaddrToInetAddress(env, &ss, NULL);
+    return sockaddrToInetAddress(env, reinterpret_cast<sockaddr_storage*>(&req.ifr_addr), NULL);
 }
 
 static jint Posix_ioctlInt(JNIEnv* env, jobject, jobject javaFd, jint cmd, jobject javaArg) {
@@ -987,14 +966,11 @@ static jint Posix_recvfromBytes(JNIEnv* env, jobject, jobject javaFd, jobject ja
     if (bytes.get() == NULL) {
         return -1;
     }
-    union {
-        sockaddr_storage ss;
-        sockaddr sa;
-    };
+    sockaddr_storage ss;
     socklen_t sl = sizeof(ss);
     memset(&ss, 0, sizeof(ss));
     int fd;
-    sockaddr* from = (javaInetSocketAddress != NULL) ? &sa : NULL;
+    sockaddr* from = (javaInetSocketAddress != NULL) ? reinterpret_cast<sockaddr*>(&ss) : NULL;
     socklen_t* fromLength = (javaInetSocketAddress != NULL) ? &sl : 0;
     jint recvCount = NET_FAILURE_RETRY("recvfrom", recvfrom(fd, bytes.get() + byteOffset, byteCount, flags, from, fromLength));
     fillInetSocketAddress(env, recvCount, javaInetSocketAddress, &ss);
@@ -1044,15 +1020,12 @@ static jint Posix_sendtoBytes(JNIEnv* env, jobject, jobject javaFd, jobject java
     if (bytes.get() == NULL) {
         return -1;
     }
-    union {
-        sockaddr sa;
-        sockaddr_storage ss;
-    };
+    sockaddr_storage ss;
     if (javaInetAddress != NULL && !inetAddressToSockaddr(env, javaInetAddress, port, &ss)) {
         return -1;
     }
     int fd;
-    const sockaddr* to = (javaInetAddress != NULL) ? &sa : NULL;
+    const sockaddr* to = (javaInetAddress != NULL) ? reinterpret_cast<const sockaddr*>(&ss) : NULL;
     socklen_t toLength = (javaInetAddress != NULL) ? sizeof(ss) : 0;
     return NET_FAILURE_RETRY("sendto", sendto(fd, bytes.get() + byteOffset, byteCount, flags, to, toLength));
 }

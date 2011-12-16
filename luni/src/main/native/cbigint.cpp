@@ -202,10 +202,10 @@ static uint32_t simpleMultiplyHighPrecision(uint64_t* arg1, int32_t length, uint
     {
       product =
         HIGH_IN_U64 (product) + arg2 * LOW_U32_FROM_PTR (arg1 + index);
-      SET_LOW_U32 (arg1 + index, LOW_U32_FROM_VAR (product));
+      LOW_U32_FROM_PTR (arg1 + index) = LOW_U32_FROM_VAR (product);
       product =
         HIGH_IN_U64 (product) + arg2 * HIGH_U32_FROM_PTR (arg1 + index);
-      SET_HIGH_U32 (arg1 + index, LOW_U32_FROM_VAR (product));
+      HIGH_U32_FROM_PTR (arg1 + index) = LOW_U32_FROM_VAR (product);
     }
   while (++index < length);
 
@@ -322,11 +322,11 @@ simpleAppendDecimalDigitHighPrecision (uint64_t * arg1, int32_t length, uint64_t
     {
       arg = LOW_IN_U64 (arg1[index]);
       digit = HIGH_IN_U64 (digit) + TIMES_TEN (arg);
-      SET_LOW_U32 (arg1 + index, LOW_U32_FROM_VAR (digit));
+      LOW_U32_FROM_PTR (arg1 + index) = LOW_U32_FROM_VAR (digit);
 
       arg = HIGH_IN_U64 (arg1[index]);
       digit = HIGH_IN_U64 (digit) + TIMES_TEN (arg);
-      SET_HIGH_U32 (arg1 + index, LOW_U32_FROM_VAR (digit));
+      HIGH_U32_FROM_PTR (arg1 + index) = LOW_U32_FROM_VAR (digit);
     }
   while (++index < length);
 
@@ -855,9 +855,9 @@ simpleMultiplyHighPrecision64 (uint64_t * arg1, int32_t length, uint64_t arg2)
             {
               carry2 = 0;
             }
-          SET_LOW_U32 (pArg1, LOW_U32_FROM_VAR (sum));
+          LOW_U32_FROM_PTR (pArg1) = LOW_U32_FROM_VAR (sum);
           buf32 = HIGH_U32_FROM_PTR (pArg1);
-          SET_HIGH_U32 (pArg1, LOW_U32_FROM_VAR (intermediate));
+          HIGH_U32_FROM_PTR (pArg1) = LOW_U32_FROM_VAR (intermediate);
           intermediate = carry1 + HIGH_IN_U64 (intermediate)
             + static_cast<uint64_t>(HIGH_U32_FROM_VAR (arg2)) * static_cast<uint64_t>(buf32);
         }
