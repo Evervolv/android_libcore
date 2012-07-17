@@ -156,6 +156,7 @@ public class TimeZoneTest extends junit.framework.TestCase {
             fail();
         } catch (NullPointerException expected) {
         }
+    }
 
     // http://b.corp.google.com/issue?id=6556561
     public void testCustomZoneIds() throws Exception {
