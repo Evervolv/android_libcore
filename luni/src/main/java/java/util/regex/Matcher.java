@@ -50,6 +50,11 @@ public final class Matcher implements MatchResult {
     private int regionEnd;
 
     /**
+     * Holds the position where the next find operation will take place.
+     */
+    private int findPos;
+
+    /**
      * Holds the position where the next append operation will take place.
      */
     private int appendPos;
@@ -207,6 +212,7 @@ public final class Matcher implements MatchResult {
         resetForInput();
 
         matchFound = false;
+        findPos = regionStart;
         appendPos = 0;
 
         return this;
@@ -371,17 +377,30 @@ public final class Matcher implements MatchResult {
     }
 
     /**
-     * Returns true if there is another match in the input, starting
-     * from the given position. The region is ignored.
+     * Returns the next occurrence of the {@link Pattern} in the input. The
+     * method starts the search from the given character in the input.
      *
-     * @throws IndexOutOfBoundsException if {@code start < 0 || start > input.length()}
+     * @param start
+     *            The index in the input at which the find operation is to
+     *            begin. If this is less than the start of the region, it is
+     *            automatically adjusted to that value. If it is beyond the end
+     *            of the region, the method will fail.
+     * @return true if (and only if) a match has been found.
      */
     public boolean find(int start) {
-        if (start < 0 || start > input.length()) {
-            throw new IndexOutOfBoundsException("start=" + start + "; length=" + input.length());
+        findPos = start;
+
+        if (findPos < regionStart) {
+            findPos = regionStart;
+        } else if (findPos >= regionEnd) {
+            matchFound = false;
+            return false;
         }
 
-        matchFound = findImpl(address, input, start, matchOffsets);
+        matchFound = findImpl(address, input, findPos, matchOffsets);
+        if (matchFound) {
+            findPos = matchOffsets[1];
+        }
         return matchFound;
     }
 
@@ -395,6 +414,9 @@ public final class Matcher implements MatchResult {
      */
     public boolean find() {
         matchFound = findNextImpl(address, input, matchOffsets);
+        if (matchFound) {
+            findPos = matchOffsets[1];
+        }
         return matchFound;
     }
 
@@ -407,6 +429,9 @@ public final class Matcher implements MatchResult {
      */
     public boolean lookingAt() {
         matchFound = lookingAtImpl(address, input, matchOffsets);
+        if (matchFound) {
+            findPos = matchOffsets[1];
+        }
         return matchFound;
     }
 
@@ -419,6 +444,9 @@ public final class Matcher implements MatchResult {
      */
     public boolean matches() {
         matchFound = matchesImpl(address, input, matchOffsets);
+        if (matchFound) {
+            findPos = matchOffsets[1];
+        }
         return matchFound;
     }
 
