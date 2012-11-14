@@ -16,7 +16,6 @@
 
 package libcore.io;
 
-import java.io.BufferedInputStream;
 import java.io.BufferedWriter;
 import java.io.Closeable;
 import java.io.EOFException;
@@ -227,13 +226,14 @@ public final class DiskLruCache implements Closeable {
     }
 
     private void readJournal() throws IOException {
-        InputStream in = new BufferedInputStream(new FileInputStream(journalFile));
+        StrictLineReader reader = new StrictLineReader(new FileInputStream(journalFile),
+                Charsets.US_ASCII);
         try {
-            String magic = Streams.readAsciiLine(in);
-            String version = Streams.readAsciiLine(in);
-            String appVersionString = Streams.readAsciiLine(in);
-            String valueCountString = Streams.readAsciiLine(in);
-            String blank = Streams.readAsciiLine(in);
+            String magic = reader.readLine();
+            String version = reader.readLine();
+            String appVersionString = reader.readLine();
+            String valueCountString = reader.readLine();
+            String blank = reader.readLine();
             if (!MAGIC.equals(magic)
                     || !VERSION_1.equals(version)
                     || !Integer.toString(appVersion).equals(appVersionString)
@@ -245,13 +245,13 @@ public final class DiskLruCache implements Closeable {
 
             while (true) {
                 try {
-                    readJournalLine(Streams.readAsciiLine(in));
+                    readJournalLine(reader.readLine());
                 } catch (EOFException endOfJournal) {
                     break;
                 }
             }
         } finally {
-            IoUtils.closeQuietly(in);
+            IoUtils.closeQuietly(reader);
         }
     }
 
@@ -458,9 +458,14 @@ public final class DiskLruCache implements Closeable {
         // if this edit is creating the entry for the first time, every index must have a value
         if (success && !entry.readable) {
             for (int i = 0; i < valueCount; i++) {
+                if (!editor.written[i]) {
+                    editor.abort();
+                    throw new IllegalStateException("Newly created entry didn't create value for index " + i);
+                }
                 if (!entry.getDirtyFile(i).exists()) {
                     editor.abort();
-                    throw new IllegalStateException("edit didn't create file " + i);
+                    System.logW("DiskLruCache: Newly created entry doesn't have file for index " + i);
+                    return;
                 }
             }
         }
@@ -659,10 +664,12 @@ public final class DiskLruCache implements Closeable {
      */
     public final class Editor {
         private final Entry entry;
+        private final boolean[] written;
         private boolean hasErrors;
 
         private Editor(Entry entry) {
             this.entry = entry;
+            this.written = (entry.readable) ? null : new boolean[valueCount];
         }
 
         /**
@@ -701,6 +708,9 @@ public final class DiskLruCache implements Closeable {
             synchronized (DiskLruCache.this) {
                 if (entry.currentEditor != this) {
                     throw new IllegalStateException();
+                }
+                if (!entry.readable) {
+                    written[index] = true;
                 }
                 return new FaultHidingOutputStream(new FileOutputStream(entry.getDirtyFile(index)));
             }
