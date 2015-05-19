@@ -34,16 +34,19 @@ jobject sockaddrToInetAddress(JNIEnv* env, const sockaddr_storage& ss, jint* por
     const sockaddr_in6& sin6 = reinterpret_cast<const sockaddr_in6&>(ss);
     if (ss.ss_family == AF_INET6 && IN6_IS_ADDR_V4MAPPED(&sin6.sin6_addr)) {
         // Copy the IPv6 address into the temporary sockaddr_storage.
-        sockaddr_storage tmp;
+        union {
+            sockaddr_storage st;
+            sockaddr_in in;
+        } tmp;
         memset(&tmp, 0, sizeof(tmp));
         memcpy(&tmp, &ss, sizeof(sockaddr_in6));
         // Unmap it into an IPv4 address.
-        sockaddr_in& sin = reinterpret_cast<sockaddr_in&>(tmp);
+        sockaddr_in& sin = tmp.in;
         sin.sin_family = AF_INET;
         sin.sin_port = sin6.sin6_port;
         memcpy(&sin.sin_addr.s_addr, &sin6.sin6_addr.s6_addr[12], 4);
         // Do the regular conversion using the unmapped address.
-        return sockaddrToInetAddress(env, tmp, port);
+        return sockaddrToInetAddress(env, tmp.st, port);
     }
 
     const void* rawAddress;
