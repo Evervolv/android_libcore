@@ -1306,6 +1306,11 @@ public abstract class Signature extends SignatureSpi {
 
         @Override
         public SignatureSpi getCurrentSpi() {
+            if (lock == null && sigSpi != null) {
+                // sigSpi was assigned in constructor.
+                // No need synchronized protection in this case.
+                return sigSpi;
+            }
             synchronized (lock) {
                 return sigSpi;
             }
